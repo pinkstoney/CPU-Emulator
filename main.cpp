@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 
 using Byte = unsigned char;
 using Word = unsigned short;
@@ -19,10 +20,16 @@ struct Mem
         }
     }
 
-    Byte operator[] ( u32 Address ) const
+    Byte operator[]( u32 Address ) const
     {
         return Data[Address];
     }
+
+    Byte& operator[]( u32 Address )
+    {
+        return Data[Address];
+    }
+
 };
 
 struct CPU
@@ -58,11 +65,47 @@ struct CPU
         return Data;
     }
 
+    Byte ReadByte ( u32& Cycles, Byte Address, Mem& memory)
+    {
+        Byte Data = memory[Address];
+        Cycles--;
+        return Data;
+    }
+
+    static constexpr Byte 
+        INS_LDA_IM = 0xA9,
+        INS_LDA_ZP = 0x45;
+
+    void LDASetStatus()
+    {
+        Z = (A == 0);
+        N = (A & 0b10000000) > 0;
+    }
+
     void Execute( u32 Cycles, Mem& memory)
     {
         while ( Cycles > 0 )
         {
             Byte Ins = FetchByte( Cycles, memory );
+            switch( Ins )
+            {
+                case INS_LDA_IM:
+                {
+                    Byte Value = FetchByte ( Cycles, memory );
+                    A = Value;
+                    LDASetStatus();
+                } break;
+                case INS_LDA_ZP:
+                {
+                    Byte ZeroPageAddress = FetchByte( Cycles, memory );
+                    A = ReadByte ( Cycles, ZeroPageAddress, memory);
+                    LDASetStatus();
+                } break;
+                default:
+                {
+                    std::cout << "Error: Instruction " << Ins << " is not handled.\n";
+                } break;
+            }
         }
     }
 
@@ -73,6 +116,10 @@ int main()
     Mem mem;
     CPU cpu;
     cpu.Reset( mem );
-    cpu.Execute( 2, mem );
+    mem[0xFFFC] = CPU::INS_LDA_ZP;
+    mem[0xFFFD] = 0x42;
+    mem[0x0042] = 0x84;
+    cpu.Execute( 3, mem );
+
     return 0;
 }
